@@ -11,8 +11,7 @@ El objetivo es aplicar técnicas de análisis y visualización para explorar un 
 - **Shapefile:** `COLOMBIA.shp` y archivos asociados para la representación geográfica de departamentos.
 - **Scripts principales:**
   - `Visualizacion_de_Datos.py` → Dashboard interactivo con Dash.
-  - `Visualizacion_de_Datos1.py` → Variaciones y pruebas del dashboard.
-- **Notebook:** `Fase 2 Edwin Yesid Fonseca.ipynb` con exploración inicial y visualizaciones.
+
 
 ---
 

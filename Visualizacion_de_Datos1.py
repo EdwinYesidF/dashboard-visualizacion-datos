@@ -4,23 +4,16 @@
 import dash
 from dash import dcc, html, dash_table, Input, Output
 import plotly.express as px
-import plotly.graph_objects as go
 import pandas as pd
-import numpy as np
 import geopandas as gpd
 import branca.colormap as cm
 import folium
-import base64
-from pathlib import Path
 
 
 # ----------------------------------------------------------------------------
 # 2. INICIALIZAR LA APLICACIÓN DASH
 # ----------------------------------------------------------------------------
 app = dash.Dash(__name__)
-
-ruta_certificado = Path(__file__).with_name("Certificado IBM DV0101EN _ Cognitive Class.png")
-certificado_base64 = base64.b64encode(ruta_certificado.read_bytes()).decode("utf-8")
 
 
 # ----------------------------------------------------------------------------
@@ -39,7 +32,8 @@ dataset = dataset[(dataset['Latitud'] >= -90) & (dataset['Latitud'] <= 90)]
 valores_fuera = dataset[dataset['Precio promedio (USD)'] > 50]
 dataset['Precio promedio (USD)'] = dataset['Precio promedio (USD)'].astype(float)
 dataset.loc[dataset['Precio promedio (USD)'] > 100, 'Precio promedio (USD)'] = (
-    dataset['Precio promedio (USD)'] / 100)
+    dataset['Precio promedio (USD)'] / 100
+)
 
 # 3.4 Precios negativos -> se corrigen con valor absoluto
 precios_negativos = dataset[dataset['Precio promedio (USD)'] < 0]
@@ -212,58 +206,6 @@ fig_departamentos.update_layout(
     margin=dict(l=80, r=40, t=80, b=80)
 )
 
-# Agrupar por categoría y calcular la calificación promedio
-calificaciones = dataset.groupby("Categoría")["Calificación"].mean().reset_index()
-
-# Ordenar de mayor a menor
-calificaciones = calificaciones.sort_values(by="Calificación", ascending=False)
-
-# Crear el gráfico con Plotly Express
-fig_calificaciones1 = px.bar(
-    calificaciones,
-    x="Calificación",
-    y="Categoría",
-    orientation="h",
-    color="Calificación",
-    color_continuous_scale="Viridis",
-    title="Categorías de comida con mejores calificaciones",
-)
-
-# Ajustar diseño del gráfico
-fig_calificaciones1.update_layout(
-    xaxis_title="Calificación promedio",
-    yaxis_title="Categorías",
-    plot_bgcolor="white",
-    title_font_size=18,
-    title_x=0.5
-)
-
-# Calcular el precio promedio por departamento
-precios_departamento = dataset.groupby("Departamento")["Precio promedio (USD)"].mean().reset_index()
-
-# Ordenar de mayor a menor
-precios_departamento = precios_departamento.sort_values(by="Precio promedio (USD)", ascending=False)
-
-# Crear el gráfico con Plotly Express
-fig_precios1 = px.bar(
-    precios_departamento,
-    x="Precio promedio (USD)",
-    y="Departamento",
-    orientation="h",
-    color="Precio promedio (USD)",
-    color_continuous_scale="YlOrRd",
-    title="Departamentos con restaurantes más caros",
-)
-
-# Ajustar diseño del gráfico
-fig_precios1.update_layout(
-    xaxis_title="Precio promedio (USD)",
-    yaxis_title="Departamento",
-    plot_bgcolor="white",
-    title_font_size=18,
-    title_x=0.5
-)
-
 # 6.5 Análisis geoespacial: precio y calificación promedio por departamento
 #¿hay departamentos con restaurantes más caros
 # o mejor calificados que otros?
@@ -300,86 +242,6 @@ fig_precio_calidad.update_layout(
     font=dict(family="Arial", size=12, color="#1C2936"),
     margin=dict(l=80, r=40, t=80, b=80)
 )
-# El dataset entregado no contiene la columna Ciudad. Si se incorpora en una
-# versión posterior se usa automáticamente; por ahora se filtra por Departamento.
-columna_ubicacion = "Ciudad" if "Ciudad" in dataset.columns else "Departamento"
-etiqueta_ubicacion = "Ciudad" if columna_ubicacion == "Ciudad" else "Departamento"
-
-# Filtra los datos usados por todos los componentes de la Actividad 3.
-def filtrar_dashboard(categorias, ubicaciones):
-   
-    df = dataset.copy()
-    if categorias:
-        df = df[df["Categoría"].isin(categorias)]
-    if ubicaciones:
-        df = df[df[columna_ubicacion].isin(ubicaciones)]
-    return df
-
-#Crea una dispersión y añade la recta de regresión lineal y Pearson r.
-def crear_regresion(df, x, titulo):
-    
-    figura = px.scatter(
-        df, x=x, y="Calificación", color="Categoría",
-        hover_data=["Nombre", columna_ubicacion, "Precio promedio (USD)", "Número de reseñas"],
-        labels={x: x, "Calificación": "Calificación"},
-    )
-    datos = df[[x, "Calificación"]].dropna()
-    if len(datos) >= 2 and datos[x].nunique() > 1:
-        pendiente, intercepto = np.polyfit(datos[x], datos["Calificación"], 1)
-        valores_x = np.linspace(datos[x].min(), datos[x].max(), 100)
-        figura.add_trace(go.Scatter(
-            x=valores_x, y=pendiente * valores_x + intercepto,
-            mode="lines", name="Regresión lineal",
-            line={"color": "#C0392B", "width": 3},
-        ))
-        titulo = f"{titulo} (r = {datos[x].corr(datos['Calificación']):.3f})"
-    figura.update_layout(title=titulo, template="plotly_white", legend_title_text="Categoría")
-    return figura
-
-
-def crear_figuras_actividad3(df):
-    """Construye las visualizaciones de dispersión, burbujas y regresión."""
-    hover = ["Nombre", columna_ubicacion, "Número de reseñas"]
-    dispersion = px.scatter(
-        df, x="Precio promedio (USD)", y="Calificación", color="Categoría",
-        hover_data=hover, title="Dispersión: precio promedio y calificación",
-        labels={"Precio promedio (USD)": "Precio promedio (USD)", "Calificación": "Calificación"},
-    )
-    burbujas = px.scatter(
-        df, x="Precio promedio (USD)", y="Calificación", size="Número de reseñas",
-        color="Categoría", size_max=42, hover_data=hover,
-        title="Burbujas: precio, calificación y número de reseñas",
-        labels={"Precio promedio (USD)": "Precio promedio (USD)", "Calificación": "Calificación"},
-    )
-    for figura in [dispersion, burbujas]:
-        figura.update_layout(template="plotly_white", legend_title_text="Categoría")
-    return (
-        dispersion,
-        burbujas,
-        crear_regresion(df, "Precio promedio (USD)", "Regresión: precio frente a calificación"),
-        crear_regresion(df, "Número de reseñas", "Regresión: reseñas frente a calificación"),
-    )
-
-
-def crear_mapa_filtrado(df):
-    """Genera el mapa Folium con los restaurantes que cumplen los filtros."""
-    df = df.dropna(subset=["Latitud", "Longitud"])
-    df = df[df["Latitud"].between(-90, 90) & df["Longitud"].between(-180, 180)]
-    if df.empty:
-        return "<p>No hay restaurantes con coordenadas para los filtros seleccionados.</p>"
-    mapa = folium.Map(location=[df["Latitud"].mean(), df["Longitud"].mean()], zoom_start=6)
-    for _, fila in df.iterrows():
-        folium.CircleMarker(
-            location=[fila["Latitud"], fila["Longitud"]], radius=5, fill=True,
-            tooltip=str(fila["Nombre"]),
-            popup=(f"<b>{fila['Nombre']}</b><br>Categoría: {fila['Categoría']}<br>"
-                   f"Calificación: {fila['Calificación']}<br>"
-                   f"Precio: USD {fila['Precio promedio (USD)']}<br>"
-                   f"Reseñas: {fila['Número de reseñas']}"),
-        ).add_to(mapa)
-    return mapa._repr_html_()
-
-
 
 
 # ----------------------------------------------------------------------------
@@ -393,7 +255,7 @@ def crear_mapa_filtrado(df):
 def actualizar_mapa(departamento_seleccionado):
     """Mapa de marcadores: un pin por restaurante del departamento elegido."""
     if departamento_seleccionado is None:
-        return ""  
+        return ""  # evita errores si aún no hay valor seleccionado
 
     df_filtrado = dataset[dataset["Departamento"] == departamento_seleccionado]
 
@@ -467,28 +329,6 @@ def crear_mapa_coropletas(departamento_seleccionado=None):
 def actualizar_mapa_coropletas(departamento_seleccionado):
     return crear_mapa_coropletas(departamento_seleccionado)
 
-#Actividad 3
-
-@app.callback(
-    Output("grafico-dispersion", "figure"),
-    Output("grafico-burbujas", "figure"),
-    Output("grafico-regresion-precio", "figure"),
-    Output("grafico-regresion-reseñas", "figure"),
-    Input("filtro-categoria", "value"),
-    Input("filtro-ubicacion", "value"),
-)
-def actualizar_graficos_actividad3(categorias, ubicaciones):
-    return crear_figuras_actividad3(filtrar_dashboard(categorias, ubicaciones))
-
-
-@app.callback(
-    Output("mapa-actividad3", "srcDoc"),
-    Input("filtro-categoria", "value"),
-    Input("filtro-ubicacion", "value"),
-)
-def actualizar_mapa_actividad3(categorias, ubicaciones):
-    return crear_mapa_filtrado(filtrar_dashboard(categorias, ubicaciones))
-
 
 # ----------------------------------------------------------------------------
 # 8. LAYOUT DEL DASHBOARD
@@ -501,27 +341,23 @@ app.layout = html.Div([
     ),
 
     html.Div([
-    html.H3("Fase 2 - Componente Práctico"),
-    html.P("Presentado por: Edwin Yesid Fonseca Ahumada"),
-    html.P("Grupo: 203238429_7"),
-    html.P("Código: 80012391"),
-    html.P("Presentado a: SIXYEL JEYSON CASTAÑEDA CORONADO"),
-    html.P("Universidad Nacional Abierta y a Distancia – UNAD"),
-    html.P("Fecha: Septiembre 2026"),
-    html.A("Repositorio en GitHub",
-           href="https://github.com/EdwinYesidF/dashboard-visualizacion-datos",
-           target="_blank",
-           style={"color": "#1DA1F2", "textDecoration": "none", "fontWeight": "bold"})
-], style={"margin": "20px"}),
+        html.H3("Fase 2 - Componente Práctico"),
+        html.P("Presentado por: Edwin Yesid Fonseca Ahumada"),
+        html.P("Grupo: 203238429_7"),
+        html.P("Código: 80012391"),
+        html.P("Presentado a: SIXYEL JEYSON CASTAÑEDA CORONADO"),
+        html.P("Universidad Nacional Abierta y a Distancia – UNAD"),
+        html.P("Fecha: Septiembre 2026"),
+    ], style={"margin": "20px"}),
+
     html.H2("Tabla de contenidos"),
     html.Ul([
         html.Li(html.A("1. Introducción", href="#introduccion")),
         html.Li(html.A("2. Objetivos", href="#objetivos")),
-        html.Li(html.A("3. Metodoloía", href="#metodologia")),
-        html.Li(html.A("4. Actividad 1 Preparación del dataset y Análisis Exploratorio de Datos", href="#actividad1")),
-        html.Li(html.A("5. Actividad 2 Visualización Geoespacial con Folium", href="#actividad2")),
-        html.Li(html.A("6. Actividad 3 Creación de Gráficos Interactivos y Dashboard con Plotly y Dash", href="#actividad3")),
-        html.Li(html.A("7. Actividad 4 Completar la Certificación IBM Cognitive", href="#actividad4")),
+        html.Li(html.A("3. Actividad 1 Preparación del dataset y Análisis Exploratorio de Datos", href="#actividad1")),
+        html.Li(html.A("4. Actividad 2 Visualización Geoespacial con Folium", href="#actividad2")),
+        html.Li(html.A("5. Actividad 3 Creación de Gráficos Interactivos y Dashboard con Plotly y Dash", href="#actividad3")),
+        html.Li(html.A("6. Actividad 4 Completar la Certificación IBM Cognitive", href="#actividad4")),
     ], style={"backgroundColor": "#D9F7FF", "padding": "10px"}),
 
     html.H1("Introducción", id="introduccion"),
@@ -556,13 +392,6 @@ app.layout = html.Div([
         html.Li("Diseñar gráficos dinámicos e interactivos con Plotly y Dash, orientados a la construcción de dashboards informativos."),
         html.Li("Desarrollar habilidades prácticas en el uso de librerías de visualización que faciliten la interpretación crítica de los resultados.")
     ]),
-
-    html.H1("Metodología", id="metodologia"),
-        html.Ul([
-            html.Li("Herramientas utilizadas: Python 3.13, Pandas, Matplotlib, Seaborn, Plotly, Folium, GeoPandas, Dash."),
-            html.Li("Preparación del dataset: limpieza de categorías, manejo de valores faltantes, normalización de precios."),
-            html.Li("Técnicas aplicadas: histogramas, boxplots, gráficos de barras, mapas coropléticos, dashboards interactivos.")
-        ]),
 
     html.H1("Actividad 1 Preparación del dataset y Análisis Exploratorio de Datos", id="actividad1"),
 
@@ -666,28 +495,11 @@ app.layout = html.Div([
         dcc.Graph(figure=fig_calificaciones, style={"display": "inline-block", "width": "33%"}),
         dcc.Graph(figure=fig_precios, style={"display": "inline-block", "width": "33%"}),
         dcc.Graph(figure=fig_reseñas, style={"display": "inline-block", "width": "33%"}),
-
-        html.P("""
-                    Se puede identificar que las calificaciones estan bastante uniformes entre 1 y 5, sin concentrarse en un rango específico, 
-                    los restaurantes tienen una variedad amplia de valoraciones, lo que puede indicar diferencias en calidad o experiencia del cliente.
-                """),
-        html.P("""
-                    Los precios promedio se distribuyen entre 10 y 50 USD, con algunos picos en los extremos.Esto indica que hay tanto restaurantes económicos 
-                    como costosos, pero la mayoría se concentra en un rango medio 20–40 USD.
-                    """),
-        html.P("""
-                    La cantidad de reseñas varía entre 0 y 500, con una ligera concentración alrededor de los 100–150 comentarios, esto indica que la mayoría 
-                    de los restaurantes tienen una visibilidad moderada, mientras unos pocos destacan por su popularidad.
-                    """),
     ]),
-    
-    html.H2("Categorías de comidas más populares en Colombia"),
+
+    html.H2("Categorias de comidas mas populares en Colombia"),
     html.Div([
         dcc.Graph(figure=fig_categorias),
-         html.P("""
-                    El gráfico evidencia una diversidad gastronómica significativa, donde predominan las cocinas internacionales sobre la local (Colombiana). 
-                    Esto puede interpretarse como una tendencia hacia la globalización culinaria y la preferencia por experiencias gastronómicas extranjeras en el mercado analizado.
-                """),
     ]),
 
     html.H2("Departamentos que concentran mas restaurantes"),
@@ -695,26 +507,10 @@ app.layout = html.Div([
         dcc.Graph(figure=fig_departamentos),
     ]),
 
-    html.H2("Análisis de calificaciones por categoría"),
-    html.Div([
-        dcc.Graph(figure=fig_calificaciones1),
-        html.P("""
-                Este gráfico muestra las categorías de comida con mejores calificaciones promedio según el dataset.
-                """),
-    ]),
-
-    html.H2("Análisis de precios por departamento"),
-        html.Div([
-            dcc.Graph(figure=fig_precios1),
-            html.P("""
-                    Este gráfico muestra los departamentos con los restaurantes más caros según el precio promedio.
-                    """),
-        ]),
-
     html.H1("Actividad 2 Visualización Geoespacial con Folium", id="actividad2"),
 
     html.Div([
-        html.H2("Mapa de Restaurantes por Departamento"),
+        html.H2("Mapa de Restaurantes por Departamento", style={"textAlign": "center"}),
 
         dcc.Dropdown(
             id="dropdown-departamento",
@@ -760,66 +556,6 @@ app.layout = html.Div([
             style={"fontStyle": "italic", "margin": "10px 20px"}
         ),
 
-    ], style={"margin": "20px"}),
-
-    html.H1("Actividad 3: Gráficos Interactivos y Dashboard", id="actividad3"),
-    html.P(
-        "Utilice los filtros para actualizar simultáneamente los gráficos y el mapa.",
-        style={"margin": "0 20px 15px"},
-    ),
-    html.Div([
-        html.Div([
-            html.Label("Categorías"),
-            dcc.Dropdown(
-                id="filtro-categoria", multi=True, value=[],
-                options=[{"label": c, "value": c} for c in sorted(dataset["Categoría"].dropna().unique())],
-                placeholder="Todas las categorías",
-            ),
-        ], style={"width": "48%", "display": "inline-block", "verticalAlign": "top"}),
-        html.Div([
-            html.Label(etiqueta_ubicacion),
-            dcc.Dropdown(
-                id="filtro-ubicacion", multi=True, value=[],
-                options=[{"label": u, "value": u} for u in sorted(dataset[columna_ubicacion].dropna().unique())],
-                placeholder=f"Todos los {etiqueta_ubicacion.lower()}s",
-            ),
-        ], style={"width": "48%", "marginLeft": "3%", "display": "inline-block", "verticalAlign": "top"}),
-    ], style={"margin": "0 20px 10px"}),
-    html.P(
-        "El archivo fuente no contiene la variable Ciudad; por ahora el segundo filtro usa Departamento. "
-        "Al agregar una columna Ciudad, el dashboard la reconocerá automáticamente.",
-        style={"fontStyle": "italic", "margin": "0 20px 15px"},
-    ) if columna_ubicacion == "Departamento" else html.Div(),
-    dcc.Tabs(value="relaciones", children=[
-        dcc.Tab(label="Dispersión y burbujas", value="relaciones", children=[
-            html.Div([
-                dcc.Graph(id="grafico-dispersion"),
-                dcc.Graph(id="grafico-burbujas"),
-            ], style={"margin": "20px"}),
-        ]),
-        dcc.Tab(label="Regresiones y correlaciones", value="regresiones", children=[
-            html.Div([
-                html.P("La línea roja es el ajuste lineal; r corresponde a la correlación de Pearson."),
-                dcc.Graph(id="grafico-regresion-precio"),
-                dcc.Graph(id="grafico-regresion-reseñas"),
-            ], style={"margin": "20px"}),
-        ]),
-        dcc.Tab(label="Mapa filtrado", value="mapa", children=[
-            html.Div([
-                html.P("Cada marcador representa un restaurante incluido por los filtros activos."),
-                html.Iframe(id="mapa-actividad3", width="100%", height="600"),
-            ], style={"margin": "20px"}),
-        ]),
-    ]),
-
-    html.H1("Actividad 4 Completar la Certificación IBM Cognitive", id="actividad4"),
-    html.H2("Certificación Data Visualization with Python"),
-    html.Div([
-        html.Img(
-            src=f"data:image/png;base64,{certificado_base64}",
-            alt="Certificado IBM Data Visualization with Python de Edwin Yesid Fonseca",
-            style={"display": "block", "maxWidth": "100%", "height": "auto", "margin": "20px auto"},
-        ),
     ], style={"margin": "20px"}),
 
 ], style={"fontFamily": "Arial", "margin": "40px"})
